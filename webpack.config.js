@@ -1,4 +1,6 @@
 const path = require("path");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const InterpolateHtmlPlugin = require("interpolate-html-plugin");
 
 module.exports = {
     mode: "development",
@@ -6,12 +8,22 @@ module.exports = {
     entry: "./src/index.js",
     output: {
         filename: "bundle.js",
-        path: path.resolve(__dirname, "static"),
+        path: path.resolve(__dirname, "build"),
     },
 
     devServer: {
-        contentBase: path.join(__dirname, "static"),
+        // static: {
+        //     directory: path.join(__dirname, "public"),
+        //     // publicPath: '/public/'
+        // }
     },
+
+    plugins: [
+        new HtmlWebpackPlugin({ template: "public/index.html" }),
+        new InterpolateHtmlPlugin({
+            PUBLIC_URL: "",
+        }),
+    ],
 
     resolve: {
         extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
@@ -30,7 +42,7 @@ module.exports = {
                                 "@babel/preset-env",
                                 { useBuiltIns: "usage", corejs: 3 },
                             ],
-                            "@babel/preset-react",
+                            ["@babel/preset-react", { runtime: "automatic" }],
                             "@babel/preset-typescript",
                         ],
                         plugins: ["@babel/plugin-transform-runtime"],
