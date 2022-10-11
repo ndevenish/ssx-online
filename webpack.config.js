@@ -1,11 +1,9 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
-const InterpolateHtmlPlugin = require("interpolate-html-plugin");
 
 module.exports = {
     mode: "development",
-    // entry: "./src/js/index",
-    entry: "./src/index.js",
+    entry: "./src/js/index.js",
     output: {
         filename: "bundle.js",
         path: path.resolve(__dirname, "build"),
@@ -19,12 +17,7 @@ module.exports = {
         // }
     },
 
-    plugins: [
-        new HtmlWebpackPlugin({ template: "src/index.html" }),
-        new InterpolateHtmlPlugin({
-            PUBLIC_URL: "",
-        }),
-    ],
+    plugins: [new HtmlWebpackPlugin({ template: "src/js/index.html" })],
 
     resolve: {
         extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
