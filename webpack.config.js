@@ -20,7 +20,7 @@ module.exports = {
     },
 
     plugins: [
-        new HtmlWebpackPlugin({ template: "public/index.html" }),
+        new HtmlWebpackPlugin({ template: "src/index.html" }),
         new InterpolateHtmlPlugin({
             PUBLIC_URL: "",
         }),
