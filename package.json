@@ -38,8 +38,7 @@
     },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "start": "webpack-dev-server",
         "build": "webpack --progress --mode=production",
-        "serve": "concurrently \"poetry run  poetry run uvicorn ssx_online.fast:app --reload --port 5000  --root-path /api\" \"webpack-dev-server\""
+        "start": "concurrently \"poetry run  poetry run uvicorn ssx_online.fast:app --reload --port 5000  --root-path /api\" \"webpack-dev-server\""
     }
 }
