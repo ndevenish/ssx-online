@@ -18,6 +18,7 @@
         "@typescript-eslint/parser": "^5.40.0",
         "babel-eslint": "^10.1.0",
         "babel-loader": "^8.2.5",
+        "concurrently": "^7.4.0",
         "core-js": "^3.25.5",
         "css-loader": "^6.7.1",
         "eslint": "^8.25.0",
@@ -38,6 +39,7 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "start": "webpack-dev-server",
-        "build": "webpack --progress --mode=production"
+        "build": "webpack --progress --mode=production",
+        "serve": "concurrently \"poetry run  poetry run uvicorn ssx_online.fast:app --reload --port 5000  --root-path /api\" \"webpack-dev-server\""
     }
 }

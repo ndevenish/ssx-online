@@ -15,6 +15,14 @@ module.exports = {
         //     directory: path.join(__dirname, "public"),
         //     // publicPath: '/public/'
         // }
+        proxy: {
+            "/api": {
+                target: "http://127.0.0.1:5000",
+                pathRewrite: { "^/api": "" },
+            },
+            // changeOrigin: true,
+            // secure: false,
+        },
     },
 
     plugins: [new HtmlWebpackPlugin({ template: "src/js/index.html" })],
