@@ -9,8 +9,12 @@ license = "BSD-3-Clause"
 python = "^3.10"
 fastapi = "^0.85.0"
 uvicorn = "^0.18.3"
+sse-starlette = "^1.1.6"
+python-dateutil = "^2.8.2"
+ispyb = "^6.12.1"
 
 [tool.poetry.dev-dependencies]
+sqlalchemy-stubs = "^0.4"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
