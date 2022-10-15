@@ -13,14 +13,14 @@ import ispyb.sqlalchemy as ispyb
 import sqlalchemy
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from pydantic import AnyHttpUrl, BaseModel, DirectoryPath, Extra
+from pydantic import AnyHttpUrl, BaseModel, DirectoryPath, Extra, Field
 from sqlalchemy.orm import Session, joinedload, raiseload
 
 app = FastAPI()
 
 # The database does not store time zones. Let's assume it all happens in one
 SITE_TZ = dateutil.tz.gettz("Europe/London")
-KNOWN_VISITS = {"mx24447-95"}
+KNOWN_VISITS = {"mx24447-95", "mx24447-42"}
 
 
 @lru_cache
@@ -38,11 +38,16 @@ def ispyb_connection_sqlalchemy() -> sqlalchemy.Connection:
         yield connection
 
 
-# @contextmanager
 def get_session() -> Session:
-    with ispyb_connection_sqlalchemy() as conn:
-        with Session(conn, future=True) as session:
-            yield session
+    """
+    FastAPI Dependency function to make an sqlalchemy connection
+    """
+    try:
+        with ispyb_connection_sqlalchemy() as conn:
+            with Session(conn, future=True) as session:
+                yield session
+    except sqlalchemy.exc.InterfaceError:
+        raise HTTPException(503, "The database was unavailable")
 
 
 def _get_dcs_for_blsession(
@@ -71,6 +76,12 @@ class DB_Proposal(BaseModel):
 
     class Config:
         orm_mode = True
+        schema_extra = {
+            "example": {
+                "proposalCode": "mx",
+                "proposalNumber": 424242,
+            }
+        }
 
 
 class DB_BLSession(BaseModel):
@@ -81,7 +92,7 @@ class DB_BLSession(BaseModel):
     around between sessions without the risk of attempting to access.
     """
 
-    sessionId: int
+    sessionId: int = Field()
     beamLineName: str
     beamLineOperator: str
     endDate: datetime
@@ -93,6 +104,17 @@ class DB_BLSession(BaseModel):
     class Config:
         orm_mode = True
         extra = Extra.allow
+        schema_extra = {
+            "example": {
+                "sessionId": 20000042,
+                "beamLineName": "i24",
+                "beamLineOperator": "Dr Nota Number",
+                "endDate": "2004-04-24T12:00:00",
+                "startDate": "2004-04-24T08:00:00",
+                "visit_number": 42,
+                "Proposal": {"proposalCode": "mx", "proposalNumber": 42424},
+            }
+        }
 
 
 class VisitBase(DB_BLSession):
@@ -137,18 +159,9 @@ class VisitBase(DB_BLSession):
 
     class Config:
         schema_extra = {
-            "example": {
-                "code": "mx23345-92",
-                "year": "2022",
-                "beamline": "i24",
-                "path": "/dls/i24/data/2022/mx23345-92",
-                "start": datetime.fromisoformat("2022-10-07T12:00:00+01:00"),
-                "end": datetime.fromisoformat("2022-10-07T20:00:00+01:00"),
-                "url": "http://localhost:5000/api/visits/mx23345-92",
-                "operator": "Dr A. Scientist",
-            }
+            "example": DB_BLSession.Config.schema_extra["example"]
+            | {"code": "mx42424-42", "url": "http://localhost:5000/visits/mx42424-42"}
         }
-        # orm_mode = True
 
 
 class DB_DataCollectionGroup(BaseModel):
@@ -189,6 +202,22 @@ class DataCollection(DB_DataCollection):
             **dc.dict(),
         )
 
+    class Config:
+        schema_extra = {
+            "example": {
+                "dataCollectionId": 9000001,
+                "startTime": "2004-04-24T09:42:32",
+                "endTime": "2004-04-24T10:24:42",
+                "DataCollectionGroup": {"experimentType": "Serial Fixed"},
+                "numberOfImages": 24242,
+                "runStatus": "DataCollection Successful",
+                "imageDirectory": "/dls/i24/data/2022/mx42424-42/empty_space",
+                "fileTemplate": "nothing01_#####.cbf",
+                "filesystem_path": "/dls/i24/data/2022/mx42424-42/empty_space/nothing01_#####.cbf",
+                "url": "http://localhost:5000/dc/9000001",
+            }
+        }
+
 
 class Visit(VisitBase):
     DataCollections: list[DataCollection]
@@ -208,6 +237,12 @@ class Visit(VisitBase):
         return super().from_blsession(
             request, session, blsession, DataCollections=dcs, **kwargs
         )
+
+    class Config:
+        schema_extra = {
+            "example": VisitBase.Config.schema_extra["example"]
+            | {"DataCollections": [DataCollection.Config.schema_extra["example"]]}
+        }
 
 
 class NoSuchVisitError(RuntimeError):

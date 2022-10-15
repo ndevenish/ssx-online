@@ -1,5 +1,5 @@
 
-.PHONY: run-db server
+.PHONY: run-db server run-db-attach
 
 nothing:
 	@echo "Options:"
@@ -9,6 +9,10 @@ nothing:
 run-db: tests/.built_image test-ispyb.cfg
 	docker stop -t 0 test-ispyb || true
 	docker run -d --rm --name test-ispyb -p 3306:3306 test-ispyb
+
+run-db-attach: tests/.built_image test-ispyb.cfg
+	docker stop -t 0 test-ispyb || true
+	docker run --rm --name test-ispyb -p 3306:3306 test-ispyb
 
 tests/.built_image: tests/ispyb-database/custom.sql tests/ispyb-database/Dockerfile
 	docker build -t test-ispyb tests/ispyb-database
