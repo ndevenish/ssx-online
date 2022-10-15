@@ -151,26 +151,6 @@ class VisitBase(DB_BLSession):
         # orm_mode = True
 
 
-class Visit(VisitBase):
-    DataCollections: list[DataCollection]
-
-    @classmethod
-    def from_blsession(
-        cls,
-        request: Request,
-        session: Session,
-        blsession: DB_BLSession,
-        **kwargs,
-    ) -> Visit:
-        dcs = [
-            DataCollection.from_datacollection(dc, request)
-            for dc in _get_dcs_for_blsession(session, blsession)
-        ]
-        return super().from_blsession(
-            request, session, blsession, DataCollections=dcs, **kwargs
-        )
-
-
 class DB_DataCollectionGroup(BaseModel):
     experimentType: ExperimentType | None
 
@@ -207,6 +187,26 @@ class DataCollection(DB_DataCollection):
             filesystem_path=pathlib.Path(dc.imageDirectory) / dc.fileTemplate,
             url=request.url_for("get_datacollection", dcid=dc.dataCollectionId),
             **dc.dict(),
+        )
+
+
+class Visit(VisitBase):
+    DataCollections: list[DataCollection]
+
+    @classmethod
+    def from_blsession(
+        cls,
+        request: Request,
+        session: Session,
+        blsession: DB_BLSession,
+        **kwargs,
+    ) -> Visit:
+        dcs = [
+            DataCollection.from_datacollection(dc, request)
+            for dc in _get_dcs_for_blsession(session, blsession)
+        ]
+        return super().from_blsession(
+            request, session, blsession, DataCollections=dcs, **kwargs
         )
 
 
