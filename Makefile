@@ -17,5 +17,5 @@ tests/.built_image: tests/ispyb-database/custom.sql tests/ispyb-database/Dockerf
 test-ispyb.cfg:
 	echo "[ispyb_sqlalchemy]\nusername = root\npassword = \nhost = localhost\nport = 3306\ndatabase = ispyb" > test-ispyb.cfg
 
-server:
-	poetry run uvicorn ssx_online.fast:app --reload --port 5000
+server: test-ispyb.cfg
+	ISPYB_CREDENTIALS=test-ispyb.cfg poetry run uvicorn ssx_online.fast:app --reload --port 5000
