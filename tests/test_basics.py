@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,4 +21,21 @@ def test_root_redirect(client):
 def test_get_visits(client):
     response = client.get("/visits")
     response.raise_for_status()
-    assert any(x["code"] == "mx24447-95" for x in response.json())
+    code = "mx24447-95"
+    matched_visit = [x for x in response.json() if x["code"] == code]
+    assert len(matched_visit) == 1
+    assert matched_visit[0]["url"].endswith(f"/visits/{code}")
+
+
+def test_get_visit(client):
+    response = client.get("/visits/mx24447-95")
+    response.raise_for_status()
+    visit = response.json()
+    assert visit["DataCollections"]
+    assert any(x["dataCollectionId"] == 9120230 for x in visit["DataCollections"])
+
+
+def test_get_dc(client):
+    response = client.get("/dc/9120230")
+    response.raise_for_status()
+    pprint(response.json())
