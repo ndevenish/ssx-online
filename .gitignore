@@ -25,3 +25,4 @@ yarn-error.log*
 __pycache__/
 
 tests/.built_image
+test-ispyb.cfg
