@@ -12,6 +12,7 @@ import fastapi
 import ispyb.sqlalchemy as ispyb
 import sqlalchemy
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import AnyHttpUrl, BaseModel, DirectoryPath, Extra
 from sqlalchemy.orm import Session, joinedload, raiseload
 
@@ -318,6 +319,11 @@ def get_session_from_visit_code(
 #             raise
 
 #     return EventSourceResponse(_timer())
+
+
+@app.get("/", include_in_schema=False)
+def get_root():
+    return RedirectResponse("/docs")
 
 
 @app.get("/visits", response_model=list[VisitBase])
