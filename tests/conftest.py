@@ -1,3 +1,19 @@
+"""
+Pytest configuration file
+
+Problem: We want a test database to run against. We want this to have
+the full ispyb schema, but we don't want the user to have to manually
+start their own test database; especially since we want to allow
+mutations (in general, though this specific repo might not).
+
+Solution: A class that starts a container, and takes care of the port
+mapping so that we don't need to expose a fixed (potentially
+conflicting) port on the host machine. This is managed in the
+running_container context manager. This is used in the ispyb_database
+fixture. The ispyb fixture uses this with injected credentials, to
+allow the ispyb module to find the database, with no additional
+configuration.
+"""
 from __future__ import annotations
 
 import itertools
@@ -202,7 +218,6 @@ def _get_container_runtime() -> ContainerRuntime | None:
 def running_container(
     docker_context: os.PathLike | str,
     internal_ports: list[int] = [],
-    timeout_seconds: int = 10,
 ) -> Iterator[RunningContainer]:
     """
     Run a container as a context manager.
