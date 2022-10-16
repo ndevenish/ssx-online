@@ -1,5 +1,5 @@
 default_language_version:
-    python: python3.8
+    python: python3.10
 
 repos:
     # Automatically sort imports
@@ -32,7 +32,7 @@ repos:
       hooks:
           - id: mypy
             args: [--python-version=3.10, --ignore-missing-imports]
-            additional_dependencies: [types-python-dateutil]
+            additional_dependencies: [types-python-dateutil, types-aiofiles]
 
     - repo: https://github.com/pre-commit/mirrors-prettier
       rev: "v3.0.0-alpha.1"

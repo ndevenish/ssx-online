@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 import pathlib
 import re
 from contextlib import contextmanager
@@ -7,20 +10,50 @@ from datetime import datetime
 from enum import Enum
 from functools import lru_cache
 
+import aiofiles.os
 import dateutil.tz
 import fastapi
 import ispyb.sqlalchemy as ispyb
 import sqlalchemy
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from pydantic import AnyHttpUrl, BaseModel, DirectoryPath, Extra, Field
+from pydantic import AnyHttpUrl, BaseModel, Extra, Field
 from sqlalchemy.orm import Session, joinedload, raiseload
+from sse_starlette.sse import EventSourceResponse
+
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
+
+# @app.on_event("shutdown")
+# async def shutdown():
+#     print("Shutting down event")
 
 # The database does not store time zones. Let's assume it all happens in one
 SITE_TZ = dateutil.tz.gettz("Europe/London")
 KNOWN_VISITS = {"mx24447-95", "mx24447-42"}
+
+
+def visit_path_for_blsession(blsession: DB_BLSession | ispyb.BLSession) -> pathlib.Path:
+    """
+    Map from a BLSession to a filesystem visit path
+    """
+    visit_code = f"{blsession.Proposal.proposalCode}{blsession.Proposal.proposalNumber}-{blsession.visit_number}"
+    return pathlib.Path(
+        f"/dls/{blsession.beamLineName}/data/{blsession.startDate.year}/{visit_code}"
+    )
+
+
+def _remap_path(path: pathlib.Path) -> pathlib.Path:
+    """
+    Remap any file access path before access, for testing and transplantation.
+    """
+    # return pathlib.Path("/Users/nickd/dials/react/ssx-online/_test_root") / path
+    if not path.is_absolute():
+        raise ValueError("Cannot remap relative path")
+    if root := os.getenv("DLS_ROOT"):
+        return pathlib.Path(root) / pathlib.Path(*path.parts[1:])
+    return path
 
 
 @lru_cache
@@ -38,16 +71,23 @@ def ispyb_connection_sqlalchemy() -> sqlalchemy.Connection:
         yield connection
 
 
-def get_session() -> Session:
-    """
-    FastAPI Dependency function to make an sqlalchemy connection
-    """
+@contextmanager
+def ispyb_session() -> Session:
+    """Make an ispyb sqlalchemy session, as a context manager"""
     try:
         with ispyb_connection_sqlalchemy() as conn:
             with Session(conn, future=True) as session:
                 yield session
     except sqlalchemy.exc.InterfaceError:
         raise HTTPException(503, "The database was unavailable")
+
+
+def get_session() -> Session:
+    """
+    FastAPI Dependency function to make an sqlalchemy connection
+    """
+    with ispyb_session() as session:
+        yield session
 
 
 def _get_dcs_for_blsession(
@@ -153,10 +193,6 @@ class VisitBase(DB_BLSession):
             **kwargs,
         )
 
-    @property
-    def path(self) -> DirectoryPath:
-        return pathlib.Path(f"/dls/{self.beamline}/data/{self.year}/{self.code}")
-
     class Config:
         schema_extra = {
             "example": DB_BLSession.Config.schema_extra["example"]
@@ -196,6 +232,9 @@ class DataCollection(DB_DataCollection):
         cls, dc: ispyb.DataCollection, request: Request
     ) -> DataCollection:
         dc = DB_DataCollection.from_orm(dc)
+
+        # Work out where the PIA results would be
+
         return cls(
             filesystem_path=pathlib.Path(dc.imageDirectory) / dc.fileTemplate,
             url=request.url_for("get_datacollection", dcid=dc.dataCollectionId),
@@ -410,4 +449,135 @@ async def get_datacollection(
     except sqlalchemy.exc.NoResultFound:
         raise HTTPException(404, "No such DCID")
 
+    # Attempt to work out where the PIA records should be
     return DataCollection.from_datacollection(dc, request)
+
+
+class PIAResult(BaseModel):
+    n_spots_4A: int
+    n_spots_total: int
+    file_number: int
+
+    class Config:
+        schema_extra = {
+            "example": {"n_spots_4A": 42, "n_spots_total": 50, "file_number": 332}
+        }
+
+
+def _get_classic_pia_path(dc: ispyb.DataCollection) -> pathlib.Path:
+    visit_path = visit_path_for_blsession(dc.DataCollectionGroup.BLSession)
+    print("Calculated visit path:", visit_path)
+    file_parts = re.match(r"^([^#]*)(_#*).(.+)$", dc.fileTemplate)
+    assert file_parts is not None, f"Could not parse prefix from {dc.fileTemplate}"
+    file_prefix = file_parts.group(1)
+    return _remap_path(
+        visit_path / "processing" / "_hitfind_results" / f"{file_prefix}.out"
+    )
+
+
+@app.get(
+    "/dc/{dcid}/pia",
+    description="Get the PIA data",
+    response_model=list[PIAResult],
+    responses={
+        200: {
+            "content": {
+                "application/json": {},
+                "text/event-stream": {
+                    "example": (
+                        'data: {"n_spots_4A": 42, "n_spots_total": 50, "file_number": 332}'
+                        "\n\n"
+                        'data: {"n_spots_4A": 12, "n_spots_total": 12, "file_number": 333}'
+                    )
+                },
+            },
+            "description": "Return the PIA data",
+        }
+    },
+)
+async def get_datacollection_pia(
+    request: Request,
+    dcid: int = fastapi.Path(description="The Data Collection ID", example="9121304"),
+    range: str
+    | None = Header(
+        default=None,
+        description="Partial range to return. Used to resume entries when partial contents have been received. Accepts form [lines=]<range-start>[-]",
+    ),
+):
+    # The user might accept multiple forms. If we do, then try to choose the most
+    # appropriate form for response.
+    accepted_types = {
+        x.strip() for x in request.headers.get("accept", "application/json").split(",")
+    }
+
+    with ispyb_session() as session:
+        try:
+            dc: ispyb.DataCollection = (
+                session.query(ispyb.DataCollection)
+                .options(
+                    joinedload(ispyb.DataCollection.DataCollectionGroup)
+                    .joinedload(ispyb.DataCollectionGroup.BLSession)
+                    .joinedload(ispyb.BLSession.Proposal),
+                    raiseload("*"),
+                )
+                .filter(ispyb.DataCollection.dataCollectionId == dcid)
+                .one()
+            )
+        except sqlalchemy.exc.NoResultFound:
+            raise HTTPException(404, "No such DCID")
+
+    # Let's work out if we have PIA data for this datacollection.
+    # We could have three states:
+    # - There is no PIA (yet). This means that it might appear in the future
+    #   - JSON: Return 404, it is not yet found
+    #   - Stream: Results might appear. Allow the stream to watch for data to appear.
+    # - There is PIA in progress. The file is partial.
+    #   - JSON: Result the partial file with a 206 PARTIAL CONTENT status code. If the
+    #           user provided a Range header, then offset the results by the number of
+    #           entries provided.
+    #   - Stream: Use the Range header to work out the offset, then resume streaming
+    #             from there.
+    # - The PIA is complete, no more results will be found.
+    #   - JSON: Return the whole PIA document. If a range was requested, and we know
+    #           that this is the end, then return a 200 code instead of a 206.
+    #   - Stream: Return the stream/offset for stream to the end, and then close
+    #             the stream. If a stream is already opened, then close it.
+    #
+    # Note that - it might not be possible to truly tell if all of the PIA images
+    # have appeared, if it's just slow, or we have gotten a timeout whilst waiting.
+    # So in the worst case this might need to be timeout-determined, which makes it
+    # hard to re-determine if the client re-requests.
+
+    # 1. "Classic" non-zocalo PIA
+    pia_results_path = _get_classic_pia_path(dc)
+
+    print("Expected 'Classic' PIA results at:", pia_results_path)
+
+    if not await aiofiles.os.path.isfile(pia_results_path):
+        if "text/event-stream" not in accepted_types:
+            raise HTTPException(
+                404, "PIA Results not found. They might not have started yet."
+            )
+
+    # File might exist. We want to return, either partially or in whole. Either way,
+    # we need to read and parse the file.
+
+    from .filewatcher import FileLineReader
+
+    async def _emit_lines_to_client():
+        reader = FileLineReader("a.txt")
+
+        lines = reader.readlines_continuous()
+        try:
+            while True:
+                line = await asyncio.wait_for(anext(lines), timeout=10)
+                print("Got line:", line.strip())
+                yield line.strip()
+        except asyncio.TimeoutError:
+            print("Went a long period with no data; ending")
+
+    # If we've asked for a text stream... then send one
+    if "text/event-stream" in accepted_types:
+        return EventSourceResponse(_emit_lines_to_client())
+
+    return [PIAResult(n_spots_4A=42, n_spots_total=50, file_number=221)]

@@ -1,4 +1,12 @@
 [[package]]
+name = "aiofiles"
+version = "22.1.0"
+description = "File support for asyncio."
+category = "main"
+optional = false
+python-versions = ">=3.7,<4.0"
+
+[[package]]
 name = "anyio"
 version = "3.6.1"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
@@ -432,9 +440,10 @@ standard = ["colorama (>=0.4)", "httptools (>=0.4.0)", "python-dotenv (>=0.13)",
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "fdcef31e75d41f1d4a210cffa4872f1fbb795aa23ad5b21782d58e1a83864adc"
+content-hash = "16534d59fa452f12e8f4922a5cbdc565c642346dfa5fcebbc493c2fb1e9be45b"
 
 [metadata.files]
+aiofiles = []
 anyio = []
 attrs = []
 certifi = []
