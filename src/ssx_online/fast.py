@@ -21,6 +21,8 @@ from pydantic import AnyHttpUrl, BaseModel, Extra, Field
 from sqlalchemy.orm import Session, joinedload, raiseload
 from sse_starlette.sse import EventSourceResponse
 
+from . import filewatcher
+
 logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
@@ -562,17 +564,19 @@ async def get_datacollection_pia(
     # File might exist. We want to return, either partially or in whole. Either way,
     # we need to read and parse the file.
 
-    from .filewatcher import FileLineReader
-
     async def _emit_lines_to_client():
-        reader = FileLineReader("a.txt")
+        # reader = FileLineReader("a.txt")
 
-        lines = reader.readlines_continuous()
+        # line_reader = reader.read_lines_continuous()
+        listener = filewatcher.PIAListener(pathlib.Path("b.txt"))
+        print("Starting listen loop")
         try:
             while True:
-                line = await asyncio.wait_for(anext(lines), timeout=10)
-                print("Got line:", line.strip())
-                yield line.strip()
+                data = await asyncio.wait_for(listener.get_data_chunk(), timeout=10)
+                print("Got data:", data)
+
+                yield "\n".join(str(x) for x in data)
+
         except asyncio.TimeoutError:
             print("Went a long period with no data; ending")
 
