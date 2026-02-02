@@ -14,6 +14,7 @@ fixture. The ispyb fixture uses this with injected credentials, to
 allow the ispyb module to find the database, with no additional
 configuration.
 """
+
 from __future__ import annotations
 
 import itertools

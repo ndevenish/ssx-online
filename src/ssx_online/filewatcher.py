@@ -25,9 +25,9 @@ class FileWatcherEmitter:
     """
 
     # A per-class-type lookup for watcher instances
-    _watchers: dict[
-        Type[FileWatcherEmitter], dict[Path, FileWatcherEmitter]
-    ] = defaultdict(dict)
+    _watchers: dict[Type[FileWatcherEmitter], dict[Path, FileWatcherEmitter]] = (
+        defaultdict(dict)
+    )
     # A list of tasks, to prevent destruction
     _tasks: ClassVar[set[asyncio.Task]] = set()
 

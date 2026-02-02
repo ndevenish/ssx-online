@@ -500,8 +500,7 @@ def _get_classic_pia_path(dc: ispyb.DataCollection) -> pathlib.Path:
 async def get_datacollection_pia(
     request: Request,
     dcid: int = fastapi.Path(description="The Data Collection ID", example="9121304"),
-    range: str
-    | None = Header(
+    range: str | None = Header(
         default=None,
         description="Partial range to return. Used to resume entries when partial contents have been received. Accepts form [lines=]<range-start>[-]",
     ),
